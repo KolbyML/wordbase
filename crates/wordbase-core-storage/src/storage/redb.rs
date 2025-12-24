@@ -1,3 +1,5 @@
+// redb.rs
+
 //! See [`Redb`].
 
 use {
@@ -8,6 +10,7 @@ use {
         Database, MultimapTable, MultimapTableDefinition, ReadOnlyDatabase, ReadOnlyMultimapTable,
         ReadOnlyTable, ReadTransaction, ReadableDatabase, Table, TableDefinition, WriteTransaction,
     },
+    snap::raw::{Decoder as SnapDecoder, Encoder as SnapEncoder},
     std::{
         iter,
         path::Path,
@@ -153,9 +156,13 @@ pub struct ImportBatch<'txn, 'tbl> {
 
 impl storage::ImportBatch for ImportBatch<'_, '_> {
     fn insert_record(&mut self, record_id: RecordId, record: &[u8]) -> Result<()> {
+        let compressed = SnapEncoder::new()
+            .compress_vec(record)
+            .wrap_err("failed to compress record")?;
+
         self.tables
             .records
-            .insert(record_id.0, record)
+            .insert(record_id.0, compressed.as_slice())
             .wrap_err("failed to insert record")?;
         Ok(())
     }
@@ -233,8 +240,13 @@ impl LookupStorage {
                 .get(id.0)
                 .wrap_err_with(|| eyre!("failed to get {id:?}"))?
                 .ok_or_else(|| eyre!("no record {id:?}"))?;
+
+            let decompressed = SnapDecoder::new()
+                .decompress_vec(blob.value())
+                .wrap_err_with(|| eyre!("failed to decompress record {id:?}"))?;
+
             let record = decoder
-                .decode(blob.value())
+                .decode(&decompressed)
                 .wrap_err_with(|| eyre!("failed to decode {id:?}"))?;
             Ok(record)
         };

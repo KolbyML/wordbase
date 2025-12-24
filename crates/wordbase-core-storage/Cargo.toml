@@ -11,6 +11,7 @@ categories.workspace = true
 all-features = true
 
 [dependencies]
+snap = "1.1"
 derive_more = { workspace = true, features = ["debug"] }
 either = { workspace = true }
 eyre = { workspace = true }
